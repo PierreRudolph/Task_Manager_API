@@ -1,11 +1,12 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from models import Task
-from extensions import db
+from extensions import db, limiter
 tasks_bp = Blueprint("tasks", "__name__")
 
 
 @tasks_bp.route("/tasks", methods=["POST"])
+@limiter.limit("60 per minute")
 @jwt_required()
 def create_Task():
     data = request.get_json()
@@ -13,10 +14,20 @@ def create_Task():
     description = data.get("description")
     category = data.get("category")
     user_id = data.get("user_id")
+    completed = data.get("completed")
 
     # einfache Validierung
     if not title or title.strip() == "":
         return jsonify({"error": "Title ist Pflicht"}), 400
+
+    if description and len(description) > 300:
+        return jsonify({"error": "Beschreibung ist zu lang"}), 400
+
+    if category and len(category) > 50:
+        return jsonify({"error": "Kategorie ist zu lang"}), 400
+
+    if completed and not isinstance(data["completed"], bool):
+        return jsonify({"error": "completed muss true oder false sein"}), 400
 
     # aktuellen User anlegen
     user_id = get_jwt_identity()
@@ -26,8 +37,8 @@ def create_Task():
         title=title,
         description=description,
         category=category,
-        user_id=int(user_id)
-    )
+        user_id=user_id,
+        completed=completed)
 
     db.session.add(new_task)
     db.session.commit()
@@ -36,10 +47,11 @@ def create_Task():
 
 
 @tasks_bp.route("/tasks", methods=["GET"])
+@limiter.limit("60 per minute")
 @jwt_required()
 def get_tasks():
     user_id = get_jwt_identity()
-    tasks = Task.query.filter_by(user_id=int(user_id)).all()
+    tasks = Task.query.filter_by(user_id=user_id).all()
 
     result = []
     for task in tasks:
@@ -54,7 +66,8 @@ def get_tasks():
     return jsonify(result), 200
 
 
-@tasks_bp.route("/tasks/<int:task_id>", methods=["GET"])
+@tasks_bp.route("/tasks/<task_id>", methods=["GET"])
+@limiter.limit("60 per minute")
 @jwt_required()
 def get_task(task_id):
     user_id = get_jwt_identity()
@@ -66,7 +79,7 @@ def get_task(task_id):
         return jsonify({"error": "Task nicht gefunden"}), 404
 
     # Task gehört nicht diesem User
-    if task.user_id != int(user_id):
+    if task.user_id != user_id:
         return jsonify({"error": "Kein Zugriff"}), 403
 
     return jsonify({
@@ -78,10 +91,11 @@ def get_task(task_id):
     }), 200
 
 
-@tasks_bp.route("/tasks/<int:task_id>", methods=["PUT"])
+@tasks_bp.route("/tasks/<task_id>", methods=["PUT"])
+@limiter.limit("60 per minute")
 @jwt_required()
 def update_task(task_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     task = Task.query.get(task_id)
 
@@ -94,29 +108,48 @@ def update_task(task_id):
         return jsonify({"error": "Kein Zugriff"}), 403
 
     data = request.get_json()
+    title = data.get("title")
+    description = data.get("description")
+    category = data.get("category")
+    user_id = data.get("user_id")
+    completed = data.get("completed")
+
+    # einfache Validierung
+    if not title or title.strip() == "":
+        return jsonify({"error": "Title ist Pflicht"}), 400
+
+    if description and len(description) > 300:
+        return jsonify({"error": "Beschreibung ist zu lang"}), 400
+
+    if category and len(category) > 50:
+        return jsonify({"error": "Kategorie ist zu lang"}), 400
+
+    if completed and not isinstance(data["completed"], bool):
+        return jsonify({"error": "completed muss true oder false sein"}), 400
 
     # Task Updaten
     if "title" in data:
-        task.title = data["title"]
+        task.title = title
 
     if "description" in data:
-        task.description = data["description"]
+        task.description = description
 
     if "category" in data:
-        task.category = data["category"]
+        task.category = category
 
     if "completed" in data:
-        task.completed = data["completed"]
+        task.completed = completed
 
     db.session.commit()
 
     return jsonify({"message": "Task erfolgreich aktualisiert"}), 200
 
 
-@tasks_bp.route("/tasks/<int:task_id>", methods=["DELETE"])
+@tasks_bp.route("/tasks/<task_id>", methods=["DELETE"])
+@limiter.limit("60 per minute")
 @jwt_required()
 def delete_task(task_id):
-    user_id = int(get_jwt_identity())
+    user_id = get_jwt_identity()
 
     task = Task.query.get(task_id)
 

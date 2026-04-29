@@ -5,8 +5,9 @@ from dotenv import load_dotenv
 from flask_jwt_extended import JWTManager
 from flask_sqlalchemy import SQLAlchemy
 from flask import Flask
-from extensions import db
+from extensions import db, limiter
 from datetime import timedelta
+from flask_cors import CORS
 
 load_dotenv()
 
@@ -18,6 +19,8 @@ app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 
 jwt = JWTManager(app)
 db.init_app(app)
+limiter.init_app(app)
+CORS(app, origins=["http://127.0.0.1:5000"])
 
 
 # --HOME

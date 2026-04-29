@@ -1,10 +1,11 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import  create_access_token
+from flask_jwt_extended import create_access_token
+from werkzeug.security import generate_password_hash, check_password_hash
 from extensions import db
 
 from models import User
 
-auth_bp = Blueprint("auth","__name__")
+auth_bp = Blueprint("auth", "__name__")
 
 
 # --REGISTER
@@ -14,17 +15,22 @@ def register():
     username = data.get("username")
     password = data.get("password")
 
-    # einfache Validierung
-    if not username or not password:
-        return jsonify({"error": "Nutzername und Passwort sind Pflicht"}), 400
+    if not username or username.strip() == "":
+        return jsonify({"error": "Nutzername ist Pflicht"}), 400
 
-    # prüfen ob User existiert
+    if not password or password.strip() == "":
+        return jsonify({"error": "Passwort ist Pflicht"}), 400
+
+    # Passwort per Hash verschlüsseln
+    hashed_password = generate_password_hash(password)
+
+  # prüfen ob User existiert
     user_exist = User.query.filter_by(username=username).first()
     if (user_exist):
         return jsonify({"error": "Nutzer Existiert bereits"}), 400
 
     # neuen User anlegen
-    new_user = User(username=username, password=password)
+    new_user = User(username=username, password=hashed_password)
 
     db.session.add(new_user)
     db.session.commit()
@@ -44,7 +50,7 @@ def login():
     # User suchen
     user = User.query.filter_by(username=username).first()
 
-    if not user or user.password != password:
+    if not user or not check_password_hash(user.password, password):
         return jsonify({"error": "Ungültige Login-Daten"}), 401
 
     # Token erstellen
